@@ -550,7 +550,9 @@ function generalPC(p){
 function usageList(p){ return (p.usages || []).filter(function(u){ return ZONES[u]; }).map(function(u){ return ZONES[u].label; }); }
 
 /* ---------- Règle CEE ---------- */
-function cee(){ var c = state.data.cee || {}; return {titre: c.titre || 'Épaisseurs éligibles par isolant pour la prime CEE liée à la méthanisation', fiche: (c.fiche && !/^IND-/i.test(c.fiche)) ? c.fiche : 'Isolation thermique des parois planes ou cylindriques sur des installations industrielles', seuil: typeof c.seuil === 'number' ? c.seuil : 2.8, temp: c.temp || 50}; }
+function cee(){ var c = state.data.cee || {}; return {sousTitre: c.sousTitre || '', titre: c.titre || 'Épaisseurs éligibles par isolant pour la prime CEE liée à la méthanisation', fiche: (c.fiche && !/^IND-/i.test(c.fiche)) ? c.fiche : 'Isolation thermique des parois planes ou cylindriques sur des installations industrielles', seuil: typeof c.seuil === 'number' ? c.seuil : 2.8, temp: c.temp || 50}; }
+function defaultSub(c){ return 'Opération CEE : ' + c.fiche + '. Règle : R = épaisseur ÷ λ à ' + c.temp + ' °C ≥ ' + rTxt(c.seuil) + ' m²·K/W. Plus R (la résistance thermique) est élevé, plus l\'isolant a une bonne capacité d\'isolation : à épaisseur égale, l\'isolant au R le plus élevé isole le mieux. Chaque case donne R pour l\'épaisseur en colonne (mm).'; }
+function subText(c){ return c.sousTitre || defaultSub(c); }
 /* R arrondi à 2 décimales, sauf juste sous le seuil : 2,797 s'affiche 2,79 pour ne pas laisser croire à une éligibilité */
 function rTxt(r){ if (r == null) return '–'; var v = Math.round(r*100)/100, s = cee().seuil; if (r < s - 1e-9 && v >= s) v = Math.floor(r*100)/100; return v.toLocaleString('fr-FR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
 function ok(r){ return r != null && r >= cee().seuil - 1e-9; }
@@ -574,7 +576,7 @@ function chipsHtml(p){
 function render(){
   var c = cee();
   $('#meta').textContent = 'Mis à jour le ' + fmtDate(state.data.maj);
-  $('#rule-text').textContent = "Pour isoler un digesteur, l'isolant doit atteindre une résistance thermique R d'au moins " + rTxt(c.seuil) + " pour bénéficier de la prime CEE « " + c.fiche + " ». Plus l'isolant est épais, plus R est élevé : chaque isolant devient éligible à partir d'une certaine épaisseur.";
+  $('#rule-text').textContent = "Pour isoler un digesteur, l'isolant doit atteindre une résistance thermique R d'au moins " + rTxt(c.seuil) + " pour bénéficier de la prime CEE « " + c.fiche + " ». Plus R est élevé, mieux l'isolant isole. Et plus l'isolant est épais, plus R augmente : chaque isolant devient éligible à partir d'une certaine épaisseur.";
   $('#rule-big').innerHTML = 'R ≥ ' + esc(rTxt(c.seuil)) + ' m²·K/W<small>calculé avec le λ à ' + c.temp + ' °C · cuve ou paroi de grand diamètre, fluide entre 40 et 100 °C</small>';
   $('#rule-formula').textContent = 'R = épaisseur (m) ÷ λ à ' + c.temp + ' °C · ex. 0,12 m ÷ 0,038 = 3,15';
   $('#conds').innerHTML = [
@@ -676,6 +678,7 @@ function openSettings(){
     + '<div class="field"><label for="set-fiche">Opération CEE (intitulé)</label><input id="set-fiche" type="text" value="' + esc(c.fiche) + '"></div>'
     + '<div class="field"><label for="set-seuil">Résistance minimale R (m²·K/W)</label><input id="set-seuil" type="text" inputmode="decimal" value="' + esc(String(c.seuil).replace('.', ',')) + '"></div>'
     + '<div class="field wide"><label for="set-titre">Titre du tableau PDF</label><input id="set-titre" type="text" value="' + esc(c.titre) + '"></div>'
+    + '<div class="field wide"><label for="set-sub">Texte sous le titre du tableau PDF</label><textarea id="set-sub" rows="4">' + esc(subText(c)) + '</textarea><span class="muted" style="font-size:12px">Videz le champ pour revenir au texte automatique (il se met à jour avec l\'opération, le seuil et la température).</span></div>'
     + '<div class="field"><label for="set-temp">Température du λ (°C)</label><input id="set-temp" type="text" inputmode="numeric" value="' + esc(c.temp) + '"></div>'
     + '</div><p class="note" id="set-err" hidden></p></div>'
     + '<div class="dlg-foot"><span></span><div class="inline"><button class="btn" type="button" data-close>Annuler</button><button class="btn primary" type="submit">Enregistrer</button></div></div></form>';
@@ -684,7 +687,7 @@ function openSettings(){
     e.preventDefault();
     var s = numOrNull($('#set-seuil').value), t = parseInt($('#set-temp').value, 10), fi = $('#set-fiche').value.trim();
     if (!s || s <= 0 || s > 20 || !t || !fi) { var er = $('#set-err'); er.textContent = 'Renseignez l\'intitulé de l\'opération, un R entre 0 et 20 et une température.'; er.hidden = false; return; }
-    state.data.cee = {fiche: fi, seuil: s, temp: t, titre: $('#set-titre').value.trim() || cee().titre};
+    var subv = $('#set-sub').value.trim(); state.data.cee = {fiche: fi, seuil: s, temp: t, titre: $('#set-titre').value.trim() || cee().titre}; if (subv && subv !== defaultSub(cee())) state.data.cee.sousTitre = subv;
     markDirty(); dlg.close(); render(); toast('Réglages enregistrés. ' + pubWord() + ' pour les appliquer.');
   };
 }
@@ -939,6 +942,7 @@ function openPdfDialog(){
     + '<label><input type="radio" name="kind" value="table" checked> Tableau des épaisseurs éligibles (une seule page, format écran)</label>'
     + '<label><input type="radio" name="kind" value="full"> Catalogue complet (règle, tableau, fiche par isolant)</label></div></div>'
     + '<div class="field" id="pdf-title-f"><label for="pdf-title">Titre du tableau</label><input id="pdf-title" type="text" value="' + esc(cee().titre) + '"></div>'
+    + '<div class="field"><label for="pdf-sub">Texte sous le titre</label><textarea id="pdf-sub" rows="4">' + esc(subText(cee())) + '</textarea></div>'
     + '<div class="field"><span class="lbl">Isolants à inclure</span><div class="checks" style="flex-direction:column;gap:8px">'
     + '<label><input type="radio" name="scope" value="all" checked> Tous les isolants (' + all + ')</label>'
     + (z ? '<label><input type="radio" name="scope" value="zone"> Seulement ceux prévus pour : ' + esc(ZONES[z].long.toLowerCase()) + ' (' + nz + ')</label>' : '')
@@ -955,7 +959,7 @@ function openPdfDialog(){
     go.disabled = true; go.textContent = 'Génération…';
     if (kind === 'table') {
       var tb;
-      try { tb = buildTablePdf(list, client, $('#pdf-title').value.trim()); }
+      try { tb = buildTablePdf(list, client, $('#pdf-title').value.trim(), $('#pdf-sub').value.trim()); }
       catch(err) { console.error(err); go.disabled = false; go.textContent = 'Générer le PDF'; toast("Le PDF n'a pas pu être généré. Rechargez la page et réessayez.", 5000); return; }
       dlg.close();
       saveFile('Epaisseurs-eligibles-CEE-SOBREN' + (client ? '-' + slug(client) : '') + '-' + today() + '.pdf', tb);
@@ -990,7 +994,7 @@ function prepPdfImages(list){
 }
 
 /* Tableau des épaisseurs éligibles : une page paysage, toujours, quel que soit le nombre d'isolants */
-function eligPage(doc, F, list, client, standalone, titleOverride, fixedRow){
+function eligPage(doc, F, list, client, standalone, titleOverride, fixedRow, subOverride){
   var c = cee(), PW = doc.internal.pageSize.getWidth(), PH = doc.internal.pageSize.getHeight(), M = 14, LOGO = ($('#brand-logo') || {}).src || '';
   var set = function(size, style, color){ doc.setFont(F, style || 'normal'); doc.setFontSize(size); doc.setTextColor.apply(doc, color || INK_PDF); };
   var y = 13;
@@ -999,7 +1003,7 @@ function eligPage(doc, F, list, client, standalone, titleOverride, fixedRow){
   set(standalone ? 16 : 15, 'bold', NAVY_PDF);
   var tl = doc.splitTextToSize(titleOverride || c.titre, PW - 2*M); doc.text(tl, M, y, {lineHeightFactor: 1.15}); y += (tl.length - 1) * 6.4 + 6;
   set(8.6, 'normal', MUTED_PDF);
-  var sub = doc.splitTextToSize('Opération CEE : ' + c.fiche + '.  Règle : R = épaisseur ÷ λ à ' + c.temp + ' °C ≥ ' + rTxt(c.seuil) + ' m²·K/W. Chaque case donne R pour l\'épaisseur en colonne (mm).', PW - 2*M);
+  var sub = doc.splitTextToSize(subOverride || subText(c), PW - 2*M);
   doc.text(sub, M, y, {lineHeightFactor: 1.3}); y += sub.length * 4 + 1.5;
   var lg = function(x, txt, okv){ set(7.6, 'bold'); var w = doc.getTextWidth(txt) + 4; doc.setFillColor.apply(doc, okv ? YES_BG : NO_BG); doc.setDrawColor.apply(doc, okv ? YES_PDF : NO_PDF); doc.setLineWidth(0.2); doc.roundedRect(x, y - 3.3, w, 4.6, 0.8, 0.8, 'FD'); set(7.6, 'bold', okv ? YES_PDF : NO_PDF); doc.text(txt, x + 2, y); return x + w + 2; };
   var lx = lg(M, '✓ 2,96', true); set(8.2, 'normal', INK_PDF); doc.text('Éligible à la prime', lx, y); lx += doc.getTextWidth('Éligible à la prime') + 7;
@@ -1052,7 +1056,7 @@ function newPdfDoc(orientation){
   return {doc: doc, F: F};
 }
 /* PDF numérique : une seule page dont la taille s'adapte au tableau (pas de format A4 imposé) */
-function buildTablePdf(list, client, title){
+function buildTablePdf(list, client, title, sub){
   if (!window.jspdf || !window.jspdf.jsPDF) throw new Error('jsPDF absent');
   var ROW = 9.5, M = 14, nThk = [];
   list.forEach(function(p){ lines(p).forEach(function(l){ if (l.l50 && nThk.indexOf(l.e) < 0) nThk.push(l.e); }); });
@@ -1062,11 +1066,11 @@ function buildTablePdf(list, client, title){
     try { var fonts = JSON.parse(SRC.fonts); if (fonts.r && fonts.b) { doc.addFileToVFS('Plex-R.ttf', fonts.r); doc.addFont('Plex-R.ttf', 'Plex', 'normal'); doc.addFileToVFS('Plex-B.ttf', fonts.b); doc.addFont('Plex-B.ttf', 'Plex', 'bold'); F = 'Plex'; } } catch(e) {}
     return {doc: doc, F: F}; };
   var probe = mk(W, 4000);
-  eligPage(probe.doc, probe.F, list, client, false, title, ROW);
+  eligPage(probe.doc, probe.F, list, client, false, title, ROW, sub);
   var tableEnd = probe.doc.lastAutoTable.finalY;
   var H = Math.max(150, Math.ceil(tableEnd + 16 + 16));
   var o = mk(W, H);
-  eligPage(o.doc, o.F, list, client, true, title, ROW);
+  eligPage(o.doc, o.F, list, client, true, title, ROW, sub);
   return o.doc.output('blob');
 }
 function buildPdf(list, client, fiches, zone){

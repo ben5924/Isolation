@@ -25,7 +25,7 @@ Pas besoin de toucher au code.
    - modifier un isolant (bouton **Modifier** dans sa fiche) ou en ajouter un ;
    - changer l'image d'un isolant (bouton **Changer l'image** sur la carte) ;
    - ajouter les logos des fournisseurs (**Logos des fournisseurs**) : ils remplacent le nom de la marque sur le site et dans le PDF ;
-   - changer la règle CEE si l'opération évolue (**Réglages CEE** : intitulé de l'opération, titre du tableau PDF, seuil R, température du λ) ;
+   - changer la règle CEE si l'opération évolue (**Réglages CEE** : intitulé de l'opération, titre et texte du tableau PDF, seuil R, température du λ) ;
    - exporter les données en CSV pour Excel.
 3. Cliquez sur **Télécharger le site à jour (index.html)** en bas de l'écran.
 4. Sur GitHub, déposez ce nouveau `index.html` à la place de l'ancien (**Add file → Upload files**, puis **Commit changes**). Le site est à jour une minute plus tard.
