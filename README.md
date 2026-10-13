@@ -5,7 +5,7 @@ Outil web qui montre aux exploitants quels isolants, et à partir de quelle épa
 - Règle appliquée : **R = épaisseur ÷ λ à 50 °C ≥ 2,80 m²·K/W** (cuves et parois de grand diamètre, fluide entre 40 et 100 °C).
 - Épaisseurs en vert : éligibles. En rouge : non éligibles.
 - Comparaison des isolants à épaisseur égale, fiche par isolant avec contact fabricant.
-- Export PDF (bouton « Télécharger le catalogue ») : le tableau des épaisseurs éligibles sur une seule page, avec un titre modifiable, ou le catalogue complet. Un isolant ajouté apparaît automatiquement dans le tableau, qui reste sur une page.
+- Export PDF (bouton « Télécharger le catalogue ») : le tableau des épaisseurs éligibles sur une seule page au format écran (la page s'allonge avec le nombre d'isolants, usage numérique), avec un titre modifiable, ou le catalogue complet au format A4.
 
 Tout tient dans un seul fichier : `index.html` (données, logos, photos et code compris).
 

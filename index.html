@@ -936,7 +936,7 @@ function openPdfDialog(){
   var dlg = $('#dlg-pdf'), z = state.zone, all = state.data.produits.length, nz = z ? visibleList().length : 0;
   dlg.innerHTML = '<form id="pdf-form" class="form"><div class="dlg-head"><div><span class="eyebrow">Export PDF</span><h2 id="dp-title">Télécharger en PDF</h2></div><button class="x" type="button" data-close aria-label="Fermer">×</button></div>'
     + '<div class="dlg-body"><div class="field"><span class="lbl">Document</span><div class="checks" style="flex-direction:column;gap:8px">'
-    + '<label><input type="radio" name="kind" value="table" checked> Tableau des épaisseurs éligibles (une page)</label>'
+    + '<label><input type="radio" name="kind" value="table" checked> Tableau des épaisseurs éligibles (une seule page, format écran)</label>'
     + '<label><input type="radio" name="kind" value="full"> Catalogue complet (règle, tableau, fiche par isolant)</label></div></div>'
     + '<div class="field" id="pdf-title-f"><label for="pdf-title">Titre du tableau</label><input id="pdf-title" type="text" value="' + esc(cee().titre) + '"></div>'
     + '<div class="field"><span class="lbl">Isolants à inclure</span><div class="checks" style="flex-direction:column;gap:8px">'
@@ -990,8 +990,8 @@ function prepPdfImages(list){
 }
 
 /* Tableau des épaisseurs éligibles : une page paysage, toujours, quel que soit le nombre d'isolants */
-function eligPage(doc, F, list, client, standalone, titleOverride){
-  var c = cee(), PW = 297, PH = 210, M = 14, LOGO = ($('#brand-logo') || {}).src || '';
+function eligPage(doc, F, list, client, standalone, titleOverride, fixedRow){
+  var c = cee(), PW = doc.internal.pageSize.getWidth(), PH = doc.internal.pageSize.getHeight(), M = 14, LOGO = ($('#brand-logo') || {}).src || '';
   var set = function(size, style, color){ doc.setFont(F, style || 'normal'); doc.setFontSize(size); doc.setTextColor.apply(doc, color || INK_PDF); };
   var y = 13;
   if (standalone && LOGO) { try { doc.addImage(LOGO, 'PNG', M, y, 34, 7.1); } catch(e) {} }
@@ -1008,10 +1008,10 @@ function eligPage(doc, F, list, client, standalone, titleOverride){
   y += 4.5;
   var ths = []; list.forEach(function(p){ lines(p).forEach(function(l){ if (l.l50 && ths.indexOf(l.e) < 0) ths.push(l.e); }); }); ths.sort(function(a,b){ return a - b; });
   var wM = 30, wI = 42, wF = 25, wE = 21;
-  var cellW = Math.max(6.5, (PW - 2*M - wM - wI - wF - wE) / Math.max(1, ths.length));
+  var cellW = fixedRow ? Math.max(11, (PW - 2*M - wM - wI - wF - wE) / Math.max(1, ths.length)) : Math.max(6.5, (PW - 2*M - wM - wI - wF - wE) / Math.max(1, ths.length));
   /* hauteur de ligne calculée pour que tout tienne sur la page */
   var bottom = PH - 17, avail = bottom - y - 8.5, n = Math.max(1, list.length);
-  var rowH = Math.max(3.6, Math.min(9.5, avail / n));
+  var rowH = fixedRow ? fixedRow : Math.max(3.6, Math.min(9.5, avail / n));
   var fs = Math.max(4.8, Math.min(8.2, rowH * 0.92)), padV = Math.max(0.3, (rowH - fs * 0.3528 * 1.15) / 2);
   doc.autoTable({
     startY: y, margin: {left: M, right: M, top: 10, bottom: 8}, theme: 'grid', tableWidth: PW - 2*M,
@@ -1051,10 +1051,22 @@ function newPdfDoc(orientation){
   try { var fonts = JSON.parse(SRC.fonts); if (fonts.r && fonts.b) { doc.addFileToVFS('Plex-R.ttf', fonts.r); doc.addFont('Plex-R.ttf', 'Plex', 'normal'); doc.addFileToVFS('Plex-B.ttf', fonts.b); doc.addFont('Plex-B.ttf', 'Plex', 'bold'); F = 'Plex'; } } catch(e) {}
   return {doc: doc, F: F};
 }
+/* PDF numérique : une seule page dont la taille s'adapte au tableau (pas de format A4 imposé) */
 function buildTablePdf(list, client, title){
   if (!window.jspdf || !window.jspdf.jsPDF) throw new Error('jsPDF absent');
-  var o = newPdfDoc('landscape');
-  eligPage(o.doc, o.F, list, client, true, title);
+  var ROW = 9.5, M = 14, nThk = [];
+  list.forEach(function(p){ lines(p).forEach(function(l){ if (l.l50 && nThk.indexOf(l.e) < 0) nThk.push(l.e); }); });
+  var W = Math.max(297, Math.ceil(2*M + 30 + 42 + 25 + 21 + nThk.length * 11));
+  /* 1er passage sur une page très haute pour mesurer la hauteur réelle du tableau */
+  var mk = function(w, h){ var doc = new window.jspdf.jsPDF({unit: 'mm', format: [w, h], orientation: w > h ? 'landscape' : 'portrait'}), F = 'helvetica';
+    try { var fonts = JSON.parse(SRC.fonts); if (fonts.r && fonts.b) { doc.addFileToVFS('Plex-R.ttf', fonts.r); doc.addFont('Plex-R.ttf', 'Plex', 'normal'); doc.addFileToVFS('Plex-B.ttf', fonts.b); doc.addFont('Plex-B.ttf', 'Plex', 'bold'); F = 'Plex'; } } catch(e) {}
+    return {doc: doc, F: F}; };
+  var probe = mk(W, 4000);
+  eligPage(probe.doc, probe.F, list, client, false, title, ROW);
+  var tableEnd = probe.doc.lastAutoTable.finalY;
+  var H = Math.max(150, Math.ceil(tableEnd + 16 + 16));
+  var o = mk(W, H);
+  eligPage(o.doc, o.F, list, client, true, title, ROW);
   return o.doc.output('blob');
 }
 function buildPdf(list, client, fiches, zone){
