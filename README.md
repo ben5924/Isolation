@@ -5,7 +5,7 @@ Outil web qui montre aux exploitants quels isolants, et à partir de quelle épa
 - Règle appliquée : **R = épaisseur ÷ λ à 50 °C ≥ 2,80 m²·K/W** (cuves et parois de grand diamètre, fluide entre 40 et 100 °C).
 - Épaisseurs en vert : éligibles. En rouge : non éligibles.
 - Comparaison des isolants à épaisseur égale, fiche par isolant avec contact fabricant.
-- Export du catalogue en PDF (bouton « Télécharger le catalogue »).
+- Export PDF (bouton « Télécharger le catalogue ») : le tableau des épaisseurs éligibles sur une seule page, avec un titre modifiable, ou le catalogue complet. Un isolant ajouté apparaît automatiquement dans le tableau, qui reste sur une page.
 
 Tout tient dans un seul fichier : `index.html` (données, logos, photos et code compris).
 
@@ -25,7 +25,7 @@ Pas besoin de toucher au code.
    - modifier un isolant (bouton **Modifier** dans sa fiche) ou en ajouter un ;
    - changer l'image d'un isolant (bouton **Changer l'image** sur la carte) ;
    - ajouter les logos des fournisseurs (**Logos des fournisseurs**) : ils remplacent le nom de la marque sur le site et dans le PDF ;
-   - changer la règle CEE si l'opération évolue (**Réglages CEE** : intitulé de l'opération, seuil R, température du λ) ;
+   - changer la règle CEE si l'opération évolue (**Réglages CEE** : intitulé de l'opération, titre du tableau PDF, seuil R, température du λ) ;
    - exporter les données en CSV pour Excel.
 3. Cliquez sur **Télécharger le site à jour (index.html)** en bas de l'écran.
 4. Sur GitHub, déposez ce nouveau `index.html` à la place de l'ancien (**Add file → Upload files**, puis **Commit changes**). Le site est à jour une minute plus tard.
