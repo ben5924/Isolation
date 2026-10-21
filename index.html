@@ -551,7 +551,7 @@ function usageList(p){ return (p.usages || []).filter(function(u){ return ZONES[
 
 /* ---------- Règle CEE ---------- */
 function cee(){ var c = state.data.cee || {}; return {sousTitre: c.sousTitre || '', titre: c.titre || 'Épaisseurs éligibles par isolant pour la prime CEE liée à la méthanisation', fiche: (c.fiche && !/^IND-/i.test(c.fiche)) ? c.fiche : 'Isolation thermique des parois planes ou cylindriques sur des installations industrielles', seuil: typeof c.seuil === 'number' ? c.seuil : 2.8, temp: c.temp || 50}; }
-function defaultSub(c){ return 'Opération CEE : ' + c.fiche + '. Règle : R = épaisseur ÷ λ à ' + c.temp + ' °C ≥ ' + rTxt(c.seuil) + ' m²·K/W. Plus R (la résistance thermique) est élevé, plus l\'isolant a une bonne capacité d\'isolation : à épaisseur égale, l\'isolant au R le plus élevé isole le mieux.'; }
+function defaultSub(c){ return 'Opération CEE : ' + c.fiche + '. Pour chaque isolant, épaisseur minimale à poser pour bénéficier de la prime CEE.'; }
 function subText(c){ return c.sousTitre || defaultSub(c); }
 /* R arrondi à 2 décimales, sauf juste sous le seuil : 2,797 s'affiche 2,79 pour ne pas laisser croire à une éligibilité */
 function rTxt(r){ if (r == null) return '–'; var v = Math.round(r*100)/100, s = cee().seuil; if (r < s - 1e-9 && v >= s) v = Math.floor(r*100)/100; return v.toLocaleString('fr-FR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
@@ -993,7 +993,7 @@ function prepPdfImages(list){
   }));
 }
 
-/* Tableau des épaisseurs éligibles : une page paysage, toujours, quel que soit le nombre d'isolants */
+/* Tableau « éligible dès » : une page, quel que soit le nombre d'isolants (sans valeurs de R) */
 function eligPage(doc, F, list, client, standalone, titleOverride, fixedRow, subOverride){
   var c = cee(), PW = doc.internal.pageSize.getWidth(), PH = doc.internal.pageSize.getHeight(), M = 14, LOGO = ($('#brand-logo') || {}).src || '';
   var set = function(size, style, color){ doc.setFont(F, style || 'normal'); doc.setFontSize(size); doc.setTextColor.apply(doc, color || INK_PDF); };
@@ -1005,67 +1005,34 @@ function eligPage(doc, F, list, client, standalone, titleOverride, fixedRow, sub
   set(8.6, 'normal', MUTED_PDF);
   var sub = doc.splitTextToSize(subOverride || subText(c), PW - 2*M);
   doc.text(sub, M, y, {lineHeightFactor: 1.3}); y += sub.length * 4 + 3.5;
-  /* Encadré « Comment lire le tableau » : séparé du texte et du tableau, chiffres présentés comme des exemples */
-  var boxH = 15.5, by = y, bx = M, bw = PW - 2*M;
-  doc.setFillColor(244, 247, 251); doc.setDrawColor.apply(doc, LINE_PDF); doc.setLineWidth(0.25); doc.roundedRect(bx, by, bw, boxH, 1.5, 1.5, 'FD');
-  doc.setFillColor.apply(doc, ACCENT_PDF); doc.rect(bx, by, 1.3, boxH, 'F');
-  set(7.4, 'bold', ACCENT_PDF); doc.text('COMMENT LIRE LE TABLEAU', bx + 5, by + 4.6);
-  set(7.6, 'normal', MUTED_PDF); doc.text('Chaque case donne la résistance thermique R (m²·K/W) de l\'isolant pour l\'épaisseur de la colonne. Les valeurs ci-contre sont des exemples.', bx + 5 + doc.getTextWidth('COMMENT LIRE LE TABLEAU') + 4.5, by + 4.6);
-  var ly = by + 11.3;
-  var cell = function(x, txt, kind){ var w = 13, h = 5.6; doc.setLineWidth(0.25);
-    if (kind === 'y') { doc.setFillColor.apply(doc, YES_BG); doc.setDrawColor.apply(doc, YES_PDF); }
-    else if (kind === 'n') { doc.setFillColor.apply(doc, NO_BG); doc.setDrawColor.apply(doc, NO_PDF); }
-    else { doc.setFillColor(255, 255, 255); doc.setDrawColor.apply(doc, LINE_PDF); }
-    doc.rect(x, ly - 3.9, w, h, 'FD');
-    if (txt) { set(8, 'bold', kind === 'y' ? YES_PDF : NO_PDF); doc.text(txt, x + w/2, ly, {align: 'center'}); }
-    return x + w + 2.5; };
-  var lab = function(x, ex, txt){ set(7.4, 'bold', MUTED_PDF); if (ex) { doc.text('Exemple', x, ly - 1.6); } set(8, 'normal', INK_PDF); doc.text(txt, x, ex ? ly + 1.6 : ly); return x + Math.max(doc.getTextWidth(txt), 0) + 9; };
-  var s2 = rTxt(c.seuil);
-  var lx = cell(bx + 5, '2,96', 'y'); lx = lab(lx, true, '2,96 ≥ ' + s2 + ' : éligible à la prime');
-  lx = cell(lx, '2,15', 'n'); lx = lab(lx, true, '2,15 < ' + s2 + ' : non éligible');
-  lx = cell(lx, '', 'e'); lab(lx, false, 'Case vide : épaisseur non proposée par le fabricant');
-  y = by + boxH + 5;
+  y += 2;
   /* Regroupement par marque (ordre : la marque qui a l'isolant éligible le plus fin en premier) */
   var groups = [], gi = {};
   list.forEach(function(p){ var k = brandKey(p.marque); if (!(k in gi)) { gi[k] = groups.length; groups.push([]); } groups[gi[k]].push(p); });
   var rowsP = [], firstOfGroup = {};
   groups.forEach(function(g){ firstOfGroup[rowsP.length] = g.length; g.forEach(function(p){ rowsP.push(p); }); });
-  var ths = []; list.forEach(function(p){ lines(p).forEach(function(l){ if (l.l50 && ths.indexOf(l.e) < 0) ths.push(l.e); }); }); ths.sort(function(a,b){ return a - b; });
-  var wM = 28, wI = 46, wF = 62, wE = 21, nT = Math.max(1, ths.length), cellW;
-  if (fixedRow) cellW = Math.max(11, (PW - 2*M - wM - wI - wF - wE) / nT);
-  else {
-    /* page A4 imposée : on garde des cases assez larges pour lire R, la colonne Famille prend le reste */
-    wM = 22; wI = 40; wE = 19; cellW = 8.2;
-    wF = Math.max(30, Math.min(62, PW - 2*M - wM - wI - wE - nT * cellW));
-    cellW = Math.max(6.5, (PW - 2*M - wM - wI - wF - wE) / nT);
-  }
-  /* hauteur de ligne calculée pour que tout tienne sur la page */
-  var bottom = PH - 17, avail = bottom - y - 13, n = Math.max(1, rowsP.length);
-  var rowH = fixedRow ? fixedRow : Math.max(3.6, Math.min(9.5, avail / n));
-  var fs = Math.max(4.8, Math.min(8.2, rowH * 0.92)), padV = Math.max(0.3, (rowH - fs * 0.3528 * 1.15) / 2);
+  /* 4 colonnes : Marque, Isolant, Famille, Éligible dès (largeurs proportionnelles à la page) */
+  var TW = PW - 2*M, wM = TW * 0.16, wI = TW * 0.3, wE = TW * 0.15, wF = TW - wM - wI - wE;
+  var bottom = PH - 17, avail = bottom - y - 9, n = Math.max(1, rowsP.length);
+  var rowH = fixedRow ? fixedRow : Math.max(5, Math.min(11, avail / n));
+  var fs = Math.max(6, Math.min(9, rowH * 0.9)), padV = Math.max(0.4, (rowH - fs * 0.3528 * 1.15) / 2);
   var GROUP_LINE = [120, 138, 170];
   doc.autoTable({
-    startY: y, margin: {left: M, right: M, top: 10, bottom: 8}, theme: 'grid', tableWidth: PW - 2*M,
-    styles: {font: F, fontSize: fs, cellPadding: {top: padV, bottom: padV, left: 1.1, right: 1.1}, textColor: INK_PDF, lineColor: LINE_PDF, lineWidth: 0.2, halign: 'center', valign: 'middle', minCellHeight: rowH, overflow: 'ellipsize'},
-    headStyles: {fillColor: [226,242,241], textColor: NAVY_PDF, fontStyle: 'bold', font: F, fontSize: Math.min(8, fs + 0.3), minCellHeight: 6, cellPadding: {top: 1.2, bottom: 1.2, left: 1, right: 1}},
-    head: [
-      [{content: 'Marque', rowSpan: 2, styles: {valign: 'middle'}}, {content: 'Isolant', rowSpan: 2, styles: {valign: 'middle', halign: 'left'}}, {content: 'Famille', rowSpan: 2, styles: {valign: 'middle', halign: 'left'}},
-       {content: 'Épaisseur de l\'isolant (mm)  ·  valeur de R dans chaque case', colSpan: Math.max(1, ths.length)}, {content: 'Éligible dès', rowSpan: 2, styles: {valign: 'middle'}}],
-      ths.map(String)
-    ],
+    startY: y, margin: {left: M, right: M, top: 10, bottom: 8}, theme: 'grid', tableWidth: TW,
+    styles: {font: F, fontSize: fs, cellPadding: {top: padV, bottom: padV, left: 2, right: 2}, textColor: INK_PDF, lineColor: LINE_PDF, lineWidth: 0.2, halign: 'left', valign: 'middle', minCellHeight: rowH, overflow: 'linebreak'},
+    headStyles: {fillColor: [226,242,241], textColor: NAVY_PDF, fontStyle: 'bold', font: F, fontSize: Math.min(9, fs + 0.3), minCellHeight: 8, cellPadding: {top: 1.6, bottom: 1.6, left: 2, right: 2}},
+    head: [[{content: 'Marque', styles: {halign: 'center'}}, 'Isolant', 'Famille', {content: 'Éligible dès', styles: {halign: 'center'}}]],
     body: rowsP.map(function(p, i){
-      var byE = {}; rowsR(p).forEach(function(x){ byE[x.e] = x; });
       var f = firstOk(p), row = [];
-      if (firstOfGroup[i]) row.push({content: logoOf(p) ? '' : p.marque, rowSpan: firstOfGroup[i], styles: {halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: [255,255,255], overflow: 'linebreak'}});
-      return row.concat([p.reference, p.natureTableau || famOf(p).label]).concat(ths.map(function(t){ return byE[t] ? rTxt(byE[t].r) : ''; })).concat([f ? f.e + ' mm' : 'aucune']);
+      if (firstOfGroup[i]) row.push({content: logoOf(p) ? '' : p.marque, rowSpan: firstOfGroup[i], styles: {halign: 'center', valign: 'middle', fontStyle: 'bold', fillColor: [255,255,255]}});
+      return row.concat([p.reference, p.natureTableau || famOf(p).label, f ? f.e + ' mm' : 'Non éligible']);
     }),
-    columnStyles: (function(){ var cs = {0: {halign: 'center', cellWidth: wM}, 1: {halign: 'left', fontStyle: 'bold', cellWidth: wI}, 2: {halign: 'left', cellWidth: wF}}; ths.forEach(function(t, i){ cs[3 + i] = {cellWidth: cellW, cellPadding: {top: padV, bottom: padV, left: 0.4, right: 0.4}}; }); cs[3 + ths.length] = {cellWidth: wE, fontStyle: 'bold'}; return cs; })(),
+    columnStyles: {0: {cellWidth: wM}, 1: {fontStyle: 'bold', cellWidth: wI}, 2: {cellWidth: wF}, 3: {cellWidth: wE, halign: 'center', fontStyle: 'bold'}},
     didParseCell: function(d){
       if (d.section !== 'body') return;
       var p = rowsP[d.row.index], ci = d.column.index;
-      if (ci === 2) { d.cell.styles.textColor = famOf(p).pdf; d.cell.styles.fontSize = Math.max(4.6, fs - 0.6); d.cell.styles.overflow = 'linebreak'; d.cell.styles.cellPadding = {top: 0.6, bottom: 0.6, left: 1.1, right: 1.1}; }
-      if (ci >= 3 && ci < 3 + ths.length && d.cell.raw !== '') { var x = rowsR(p).filter(function(r){ return r.e === ths[ci - 3]; })[0]; if (x) { d.cell.styles.fillColor = x.ok ? YES_BG : NO_BG; d.cell.styles.textColor = x.ok ? YES_PDF : NO_PDF; d.cell.styles.fontStyle = 'bold'; } }
-      if (ci === 3 + ths.length) d.cell.styles.textColor = firstOk(p) ? YES_PDF : NO_PDF;
+      if (ci === 2) { d.cell.styles.textColor = famOf(p).pdf; d.cell.styles.fontSize = Math.max(5.6, fs - 0.6); }
+      if (ci === 3) { var ok = !!firstOk(p); d.cell.styles.fillColor = ok ? YES_BG : NO_BG; d.cell.styles.textColor = ok ? YES_PDF : NO_PDF; d.cell.styles.fontSize = fs + 0.6; }
     },
     didDrawCell: function(d){
       if (d.section !== 'body') return;
@@ -1084,7 +1051,7 @@ function eligPage(doc, F, list, client, standalone, titleOverride, fixedRow, sub
   });
   if (standalone) {
     doc.setDrawColor.apply(doc, NAVY_PDF); doc.setLineWidth(0.4); doc.line(M, PH - 11, PW - M, PH - 11);
-    set(7.2, 'normal', MUTED_PDF); doc.text('Valeurs issues des fiches techniques et déclarations de performance des fabricants. Faites valider votre dossier par SOBREN avant toute commande.', M, PH - 6.5);
+    set(7.2, 'normal', MUTED_PDF); doc.text(doc.splitTextToSize('Valeurs issues des fiches techniques et déclarations de performance des fabricants. Faites valider votre dossier par SOBREN avant toute commande.', PW - 2*M - 28), M, PH - 7.2, {lineHeightFactor: 1.25});
     set(7.2, 'bold', NAVY_PDF); doc.text('www.sobren.fr', PW - M, PH - 6.5, {align: 'right'});
   }
 }
@@ -1096,9 +1063,7 @@ function newPdfDoc(orientation){
 /* PDF numérique : une seule page dont la taille s'adapte au tableau (pas de format A4 imposé) */
 function buildTablePdf(list, client, title, sub){
   if (!window.jspdf || !window.jspdf.jsPDF) throw new Error('jsPDF absent');
-  var ROW = 9.5, M = 14, nThk = [];
-  list.forEach(function(p){ lines(p).forEach(function(l){ if (l.l50 && nThk.indexOf(l.e) < 0) nThk.push(l.e); }); });
-  var W = Math.max(297, Math.ceil(2*M + 28 + 46 + 62 + 21 + nThk.length * 11));
+  var ROW = 10, W = 210;
   /* 1er passage sur une page très haute pour mesurer la hauteur réelle du tableau */
   var mk = function(w, h){ var doc = new window.jspdf.jsPDF({unit: 'mm', format: [w, h], orientation: w > h ? 'landscape' : 'portrait'}), F = 'helvetica';
     try { var fonts = JSON.parse(SRC.fonts); if (fonts.r && fonts.b) { doc.addFileToVFS('Plex-R.ttf', fonts.r); doc.addFont('Plex-R.ttf', 'Plex', 'normal'); doc.addFileToVFS('Plex-B.ttf', fonts.b); doc.addFont('Plex-B.ttf', 'Plex', 'bold'); F = 'Plex'; } } catch(e) {}
@@ -1106,7 +1071,7 @@ function buildTablePdf(list, client, title, sub){
   var probe = mk(W, 4000);
   eligPage(probe.doc, probe.F, list, client, false, title, ROW, sub);
   var tableEnd = probe.doc.lastAutoTable.finalY;
-  var H = Math.max(150, Math.ceil(tableEnd + 16 + 16));
+  var H = Math.max(120, Math.ceil(tableEnd + 16 + 16));
   var o = mk(W, H);
   eligPage(o.doc, o.F, list, client, true, title, ROW, sub);
   return o.doc.output('blob');
@@ -1153,7 +1118,7 @@ function buildPdf(list, client, fiches, zone){
   set(8.5, 'normal', NAVY_PDF); doc.text('www.sobren.fr  ·  contact@sobren.fr', CX, H - 14);
 
   /* Page 2 : grille d'éligibilité (paysage) */
-  doc.addPage('a4', 'landscape');
+  doc.addPage('a4', 'portrait');
   eligPage(doc, F, list, client, false);
 
   /* Les isolants en bref : cartes à hauteur variable, mesurées avant d'être dessinées */
